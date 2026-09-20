@@ -1,0 +1,145 @@
+/*
+Project: Financial Market Analytics Dashboard
+Module: Fixed Deposit Analysis
+
+Purpose:
+Transform Fixed Deposit data for Power BI analysis,
+including maturity monitoring, interest calculations,
+investment status, and maturity value.
+*/
+
+let
+    // 1. Load source table
+    Source = Excel.CurrentWorkbook(){[Name="Fixed_Deposits"]}[Content],
+
+    // 2. Set appropriate data types
+    #"Changed Type" = Table.TransformColumnTypes(
+        Source,
+        {
+            {"FD_ID", type text},
+            {"Bank", type text},
+            {"Investment_Date", type date},
+            {"Maturity_Date", type date},
+            {"Principal_Amount", Currency.Type},
+            {"Interest_Rate", Percentage.Type}
+        }
+    ),
+
+    // 3. Remove duplicate Fixed Deposit records
+    #"Removed Duplicates" =
+        Table.Distinct(
+            #"Changed Type",
+            {"FD_ID"}
+        ),
+
+    // 4. Calculate original investment tenor in days
+    #"Added Tenor Days" =
+        Table.AddColumn(
+            #"Removed Duplicates",
+            "Tenor_Days",
+            each Duration.Days(
+                [Maturity_Date] - [Investment_Date]
+            ),
+            Int64.Type
+        ),
+
+    // 5. Calculate days remaining until maturity
+    #"Added Days to Maturity" =
+        Table.AddColumn(
+            #"Added Tenor Days",
+            "Days_to_Maturity",
+            each Duration.Days(
+                [Maturity_Date] - Date.From(DateTime.LocalNow())
+            ),
+            Int64.Type
+        ),
+
+    // 6. Calculate expected interest income
+    // Simple interest calculation using 365-day basis
+    #"Added Interest Income" =
+        Table.AddColumn(
+            #"Added Days to Maturity",
+            "Expected_Interest_Income",
+            each
+                [Principal_Amount]
+                * [Interest_Rate]
+                * ([Tenor_Days] / 365),
+            Currency.Type
+        ),
+
+    // 7. Calculate maturity value
+    #"Added Maturity Value" =
+        Table.AddColumn(
+            #"Added Interest Income",
+            "Maturity_Value",
+            each
+                [Principal_Amount]
+                + [Expected_Interest_Income],
+            Currency.Type
+        ),
+
+    // 8. Classify Fixed Deposit status
+    #"Added Investment Status" =
+        Table.AddColumn(
+            #"Added Maturity Value",
+            "Investment_Status",
+            each
+                if [Days_to_Maturity] < 0 then
+                    "Matured"
+                else if [Days_to_Maturity] <= 30 then
+                    "Maturing Within 30 Days"
+                else if [Days_to_Maturity] <= 90 then
+                    "Maturing Within 90 Days"
+                else
+                    "Active",
+            type text
+        ),
+
+    // 9. Create maturity year
+    #"Added Maturity Year" =
+        Table.AddColumn(
+            #"Added Investment Status",
+            "Maturity_Year",
+            each Date.Year([Maturity_Date]),
+            Int64.Type
+        ),
+
+    // 10. Create maturity month
+    #"Added Maturity Month" =
+        Table.AddColumn(
+            #"Added Maturity Year",
+            "Maturity_Month",
+            each Date.MonthName([Maturity_Date]),
+            type text
+        ),
+
+    // 11. Create maturity bucket
+    #"Added Maturity Bucket" =
+        Table.AddColumn(
+            #"Added Maturity Month",
+            "Maturity_Bucket",
+            each
+                if [Days_to_Maturity] < 0 then
+                    "Matured"
+                else if [Days_to_Maturity] <= 30 then
+                    "0-30 Days"
+                else if [Days_to_Maturity] <= 90 then
+                    "31-90 Days"
+                else if [Days_to_Maturity] <= 180 then
+                    "91-180 Days"
+                else if [Days_to_Maturity] <= 365 then
+                    "181-365 Days"
+                else
+                    "Over 1 Year",
+            type text
+        ),
+
+    // 12. Sort by nearest maturity
+    #"Sorted Rows" =
+        Table.Sort(
+            #"Added Maturity Bucket",
+            {{"Maturity_Date", Order.Ascending}}
+        )
+
+in
+    #"Sorted Rows"
