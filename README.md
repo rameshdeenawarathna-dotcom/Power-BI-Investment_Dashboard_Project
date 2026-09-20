@@ -42,8 +42,6 @@ Key analytical capabilities include:
 
 ## Business Value
 
-## Business Value
-
 The Financial Market Investment Valuation Dashboard transforms complex investment data into a centralized and interactive reporting solution, providing finance and investment teams with timely visibility into the **valuation, income generation, maturity profile, and economic value of fixed-income investments**.
 
 The dashboard supports more effective investment portfolio management through the following capabilities:
